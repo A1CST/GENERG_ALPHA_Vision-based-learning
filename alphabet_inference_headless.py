@@ -23,6 +23,9 @@ import pickle
 import random
 import math
 import argparse
+import time
+import zipfile
+import urllib.request
 from datetime import datetime
 
 import numpy as np
@@ -34,6 +37,53 @@ from PIL import Image, ImageDraw, ImageFont
 ALPHABET_FIELD_WIDTH = 100
 ALPHABET_FIELD_HEIGHT = 100
 ALPHABET_FONT_SIZE = 64
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
+
+def download_dejavu_font():
+    """Download DejaVuSans.ttf if not present."""
+    font_path = os.path.join(FONTS_DIR, "DejaVuSans.ttf")
+
+    if os.path.exists(font_path):
+        return font_path
+
+    print("[FONT] DejaVuSans not found, downloading...")
+
+    # Create fonts directory
+    os.makedirs(FONTS_DIR, exist_ok=True)
+
+    # Download from GitHub releases
+    url = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip"
+    zip_path = os.path.join(FONTS_DIR, "dejavu-fonts.zip")
+
+    try:
+        urllib.request.urlretrieve(url, zip_path)
+        print("[FONT] Downloaded, extracting...")
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Find and extract just DejaVuSans.ttf
+            for file in zip_ref.namelist():
+                if file.endswith("DejaVuSans.ttf"):
+                    # Extract to fonts dir with just the filename
+                    with zip_ref.open(file) as src, open(font_path, 'wb') as dst:
+                        dst.write(src.read())
+                    print(f"[FONT] Extracted DejaVuSans.ttf to {font_path}")
+                    break
+
+        # Clean up zip
+        os.remove(zip_path)
+
+        if os.path.exists(font_path):
+            return font_path
+        else:
+            print("[FONT] Failed to extract DejaVuSans.ttf from zip")
+            return None
+
+    except Exception as e:
+        print(f"[FONT] Failed to download font: {e}")
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        return None
 
 
 # ================================================================
@@ -42,30 +92,51 @@ ALPHABET_FONT_SIZE = 64
 class SimpleNetwork:
     """Minimal forward-pass-only neural network for inference."""
 
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size, force_cpu=False):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
+
+        # Device info for display
+        self.device_type = "cpu"  # 'cpu', 'cuda', or 'numpy'
+        self.device_name = "CPU (NumPy)"
 
         # Try to use PyTorch if available
         try:
             import torch
             self._use_torch = True
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() and not force_cpu:
                 self.device = torch.device('cuda')
-                print(f"[NETWORK] Using GPU: {torch.cuda.get_device_name(0)}")
+                self.device_type = "cuda"
+                self.device_name = f"GPU: {torch.cuda.get_device_name(0)}"
             else:
                 self.device = torch.device('cpu')
-                print("[NETWORK] Using CPU")
+                self.device_type = "cpu"
+                self.device_name = "CPU (PyTorch)"
         except ImportError:
             self._use_torch = False
             self.device = None
-            print("[NETWORK] PyTorch not available, using pure Python")
+            self.device_type = "numpy"
+            self.device_name = "CPU (NumPy - no PyTorch)"
 
         self.w1 = None
         self.b1 = None
         self.w2 = None
         self.b2 = None
+
+    def get_device_info(self):
+        """Return device information as a dict."""
+        info = {
+            "device_type": self.device_type,
+            "device_name": self.device_name,
+            "using_torch": self._use_torch,
+            "using_gpu": self.device_type == "cuda"
+        }
+        if self._use_torch and self.device_type == "cuda":
+            import torch
+            info["cuda_version"] = torch.version.cuda
+            info["gpu_memory_total"] = f"{torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB"
+        return info
 
     def load_weights(self, ctrl_data):
         """Load weights from checkpoint data."""
@@ -150,28 +221,43 @@ class HeadlessLetterRenderer:
         self.max_rotation = 25  # degrees
         self.max_jitter_ratio = 0.2  # fraction of image size
 
-        # Load font
+        # Load font - try local fonts dir first, then system paths
+        local_font = os.path.join(FONTS_DIR, "DejaVuSans.ttf")
         font_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
+            local_font,  # Local fonts directory (auto-downloaded)
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+            "/System/Library/Fonts/Helvetica.ttc",  # Mac
+            "C:\\Windows\\Fonts\\DejaVuSans.ttf",  # Windows (if manually installed)
         ]
 
         self.font = None
         self.font_small = None
+
         for path in font_paths:
             if os.path.exists(path):
-                self.font = ImageFont.truetype(path, ALPHABET_FONT_SIZE)
-                self.font_small = ImageFont.truetype(path, max(8, ALPHABET_FONT_SIZE * 12 // 64))
-                print(f"[RENDERER] Loaded font: {path}")
-                break
+                try:
+                    self.font = ImageFont.truetype(path, ALPHABET_FONT_SIZE)
+                    self.font_small = ImageFont.truetype(path, max(8, ALPHABET_FONT_SIZE * 12 // 64))
+                    print(f"[RENDERER] Loaded font: {path}")
+                    break
+                except:
+                    pass
+
+        # If no font found, try to download DejaVuSans
+        if self.font is None:
+            downloaded_path = download_dejavu_font()
+            if downloaded_path:
+                try:
+                    self.font = ImageFont.truetype(downloaded_path, ALPHABET_FONT_SIZE)
+                    self.font_small = ImageFont.truetype(downloaded_path, max(8, ALPHABET_FONT_SIZE * 12 // 64))
+                    print(f"[RENDERER] Loaded font: {downloaded_path}")
+                except Exception as e:
+                    print(f"[RENDERER] Failed to load downloaded font: {e}")
 
         if self.font is None:
+            print("[RENDERER] FAILED TO LOAD FONTS")
             self.font = ImageFont.load_default()
             self.font_small = ImageFont.load_default()
-            print("[RENDERER] Using default font")
 
     def render(self, letter, variation=0):
         """
@@ -370,7 +456,58 @@ def select_genome_interactive():
         return genomes[0]
 
 
-def load_genome(genome_path):
+def check_cuda_available():
+    """Check if CUDA is available."""
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
+def get_cuda_device_name():
+    """Get CUDA device name if available."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_name(0)
+    except ImportError:
+        pass
+    return None
+
+
+def select_device_interactive():
+    """
+    Prompt user to select CPU or GPU if CUDA is available.
+    Returns True if user wants to force CPU, False otherwise.
+    """
+    if not check_cuda_available():
+        return False  # No choice needed, will use CPU
+
+    gpu_name = get_cuda_device_name()
+
+    print(f"\n{'=' * 60}")
+    print("SELECT DEVICE")
+    print(f"{'=' * 60}")
+    print(f"\nCUDA is available! GPU detected: {gpu_name}")
+    print()
+    print("  [1] GPU (CUDA) - Faster inference")
+    print("  [2] CPU - Use processor instead")
+    print()
+
+    while True:
+        choice = input("Select device (1/2) [default: 1]: ").strip()
+        if choice == "" or choice == "1":
+            print(f"\n  -> Using GPU: {gpu_name}")
+            return False  # Don't force CPU
+        elif choice == "2":
+            print("\n  -> Using CPU")
+            return True  # Force CPU
+        else:
+            print("  Invalid choice. Enter 1 or 2.")
+
+
+def load_genome(genome_path, force_cpu=False):
     """Load a genome from pickle file."""
     print(f"\nLoading: {genome_path}")
 
@@ -394,7 +531,7 @@ def load_genome(genome_path):
         print(f"  WARNING: Expected 26 output (letters), got {output_size}")
 
     # Create network and load weights
-    network = SimpleNetwork(input_size, hidden_size, output_size)
+    network = SimpleNetwork(input_size, hidden_size, output_size, force_cpu=force_cpu)
     network.load_weights(ctrl_data)
 
     # Get metadata
@@ -456,7 +593,7 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
     all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
     # Tracking
-    per_letter_stats = {letter: {"correct": 0, "total": 0, "predictions": []}
+    per_letter_stats = {letter: {"correct": 0, "total": 0, "predictions": [], "inference_times_ms": []}
                         for letter in all_letters}
     confusion_matrix = {letter: {pred: 0 for pred in all_letters}
                         for letter in all_letters}
@@ -465,11 +602,16 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
     total_correct = 0
     total_tests = 0
 
+    # Timing tracking
+    all_inference_times = []
+    overall_start_time = time.perf_counter()
+
     if verbose:
         print(f"\n{'=' * 60}")
         print(f"RUNNING {num_cycles} TEST CYCLES")
         print(f"Variations per letter: {len(variations)}")
         print(f"Total tests: {num_cycles} x 26 x {len(variations)} = {num_cycles * 26 * len(variations)}")
+        print(f"Device: {network.device_name}")
         print(f"{'=' * 60}")
 
     for cycle_num in range(1, num_cycles + 1):
@@ -485,11 +627,21 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
 
         cycle_correct = 0
         cycle_total = 0
+        cycle_start_time = time.perf_counter()
 
         for letter in shuffled:
             for var in variations:
                 obs = renderer.render(letter, variation=var)
+
+                # Time the inference
+                inference_start = time.perf_counter()
                 predicted, confidence = network.predict(obs)
+                inference_end = time.perf_counter()
+                inference_time_ms = (inference_end - inference_start) * 1000
+
+                all_inference_times.append(inference_time_ms)
+                per_letter_stats[letter]["inference_times_ms"].append(inference_time_ms)
+
                 is_correct = (predicted == letter)
 
                 total_tests += 1
@@ -509,18 +661,42 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
                     "variation": var,
                     "predicted": predicted,
                     "confidence": round(confidence, 4),
-                    "correct": is_correct
+                    "correct": is_correct,
+                    "inference_time_ms": round(inference_time_ms, 4)
                 })
 
+        cycle_end_time = time.perf_counter()
+        cycle_time_s = cycle_end_time - cycle_start_time
+        cycle_inferences_per_sec = cycle_total / cycle_time_s if cycle_time_s > 0 else 0
+
         cycle_data["accuracy"] = round(cycle_correct / cycle_total * 100, 2)
+        cycle_data["cycle_time_s"] = round(cycle_time_s, 3)
+        cycle_data["inferences_per_sec"] = round(cycle_inferences_per_sec, 1)
         cycle_results.append(cycle_data)
 
         if verbose:
             print(f"  Cycle {cycle_num}/{num_cycles}: {cycle_correct}/{cycle_total} "
-                  f"({cycle_data['accuracy']:.1f}%)")
+                  f"({cycle_data['accuracy']:.1f}%) | {cycle_inferences_per_sec:.1f} inf/s")
 
     # Calculate final stats
+    overall_end_time = time.perf_counter()
+    total_time_s = overall_end_time - overall_start_time
     overall_accuracy = total_correct / total_tests * 100
+
+    # Timing statistics
+    if all_inference_times:
+        avg_inference_ms = sum(all_inference_times) / len(all_inference_times)
+        min_inference_ms = min(all_inference_times)
+        max_inference_ms = max(all_inference_times)
+        sorted_times = sorted(all_inference_times)
+        median_inference_ms = sorted_times[len(sorted_times) // 2]
+        # Standard deviation
+        variance = sum((t - avg_inference_ms) ** 2 for t in all_inference_times) / len(all_inference_times)
+        std_inference_ms = variance ** 0.5
+        overall_inferences_per_sec = total_tests / total_time_s if total_time_s > 0 else 0
+    else:
+        avg_inference_ms = min_inference_ms = max_inference_ms = median_inference_ms = std_inference_ms = 0
+        overall_inferences_per_sec = 0
 
     # Letter accuracies
     letter_accuracies = []
@@ -543,7 +719,8 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
             "timestamp": datetime.now().isoformat(),
             "num_cycles": num_cycles,
             "variations_per_letter": len(variations),
-            "total_tests": total_tests
+            "total_tests": total_tests,
+            "device": network.get_device_info()
         },
         "summary": {
             "overall_accuracy": round(overall_accuracy, 2),
@@ -554,12 +731,22 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
             "problem_letters": [{"letter": l, "accuracy": round(a, 1)}
                                for l, a in problem_letters[:10]]
         },
+        "timing": {
+            "total_time_s": round(total_time_s, 3),
+            "inferences_per_sec": round(overall_inferences_per_sec, 1),
+            "avg_inference_ms": round(avg_inference_ms, 4),
+            "min_inference_ms": round(min_inference_ms, 4),
+            "max_inference_ms": round(max_inference_ms, 4),
+            "median_inference_ms": round(median_inference_ms, 4),
+            "std_inference_ms": round(std_inference_ms, 4)
+        },
         "per_letter_stats": {
             letter: {
                 "correct": stats["correct"],
                 "total": stats["total"],
                 "accuracy": round(stats["correct"] / max(1, stats["total"]) * 100, 1),
-                "predictions": stats["predictions"]
+                "predictions": stats["predictions"],
+                "avg_inference_ms": round(sum(stats["inference_times_ms"]) / max(1, len(stats["inference_times_ms"])), 4)
             }
             for letter, stats in per_letter_stats.items()
         },
@@ -573,13 +760,46 @@ def run_test_cycles(network, renderer, num_cycles=5, variations=None, verbose=Tr
 def print_results_summary(results):
     """Print a formatted summary of test results."""
     summary = results["summary"]
+    timing = results["timing"]
+    device_info = results["test_info"]["device"]
 
     print(f"\n{'=' * 60}")
     print("TEST RESULTS SUMMARY")
     print(f"{'=' * 60}")
 
+    # Device info
+    print(f"\nDevice: {device_info['device_name']}")
+    if device_info['using_gpu']:
+        print(f"  CUDA: {device_info.get('cuda_version', 'N/A')}")
+        print(f"  GPU Memory: {device_info.get('gpu_memory_total', 'N/A')}")
+
+    # Accuracy
     print(f"\nOverall Accuracy: {summary['overall_accuracy']:.1f}%")
     print(f"Correct: {summary['total_correct']} / {summary['total_correct'] + summary['total_wrong']}")
+
+    # Timing/Speed statistics
+    print(f"\n{'─' * 40}")
+    print("INFERENCE SPEED")
+    print(f"{'─' * 40}")
+    print(f"  Total time:        {timing['total_time_s']:.3f} s")
+    print(f"  Throughput:        {timing['inferences_per_sec']:.1f} inferences/sec")
+    print(f"  Avg inference:     {timing['avg_inference_ms']:.4f} ms")
+    print(f"  Min inference:     {timing['min_inference_ms']:.4f} ms")
+    print(f"  Max inference:     {timing['max_inference_ms']:.4f} ms")
+    print(f"  Median inference:  {timing['median_inference_ms']:.4f} ms")
+    print(f"  Std deviation:     {timing['std_inference_ms']:.4f} ms")
+
+    # Per-letter timing (show slowest 5)
+    letter_times = [(letter, stats['avg_inference_ms'])
+                    for letter, stats in results['per_letter_stats'].items()]
+    letter_times.sort(key=lambda x: x[1], reverse=True)
+    print(f"\n  Slowest letters:")
+    for letter, avg_ms in letter_times[:5]:
+        print(f"    {letter}: {avg_ms:.4f} ms avg")
+
+    print(f"\n{'─' * 40}")
+    print("ACCURACY BREAKDOWN")
+    print(f"{'─' * 40}")
 
     print(f"\nPerfect Letters ({summary['perfect_letter_count']}/26):")
     if summary['perfect_letters']:
@@ -637,7 +857,22 @@ def main():
         genome_info = select_genome_interactive()
         genome_path = genome_info['path']
 
-    network, genome_data = load_genome(genome_path)
+    # Device selection (only prompts if CUDA is available)
+    force_cpu = select_device_interactive()
+
+    network, genome_data = load_genome(genome_path, force_cpu=force_cpu)
+
+    # Display device info prominently
+    device_info = network.get_device_info()
+    print(f"\n{'─' * 40}")
+    if device_info['using_gpu']:
+        print(f"  RUNNING ON GPU")
+        print(f"  {device_info['device_name']}")
+        print(f"  CUDA {device_info.get('cuda_version', 'N/A')} | {device_info.get('gpu_memory_total', 'N/A')}")
+    else:
+        print(f"  RUNNING ON CPU")
+        print(f"  {device_info['device_name']}")
+    print(f"{'─' * 40}")
 
     # Create renderer
     use_aug = not args.no_augmentation
