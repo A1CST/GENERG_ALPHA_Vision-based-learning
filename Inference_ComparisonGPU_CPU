@@ -1,0 +1,206 @@
+============================================================
+SELECT ALPHABET GENOME
+============================================================
+
+Available alphabet genomes:
+
+  [1] best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+       Gen ome, 2.8 MB
+
+  [Enter] Use best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+
+Your choice:
+
+============================================================
+SELECT DEVICE
+============================================================
+
+CUDA is available! GPU detected: NVIDIA GeForce RTX 4080
+
+  [1] GPU (CUDA) - Faster inference
+  [2] CPU - Use processor instead
+
+Select device (1/2) [default: 1]: 1
+
+  -> Using GPU: NVIDIA GeForce RTX 4080
+
+Loading: best_genomes\best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+  Network: 10000 -> 32 -> 26
+  Trust: 18416.30
+
+────────────────────────────────────────
+  RUNNING ON GPU
+  GPU: NVIDIA GeForce RTX 4080
+  CUDA 12.1 | 16.0 GB
+────────────────────────────────────────
+[FONT] DejaVuSans not found, downloading...
+[FONT] Downloaded, extracting...
+[FONT] Extracted DejaVuSans.ttf to C:\Users\user\Documents\text_pre_new\fonts\DejaVuSans.ttf
+[RENDERER] Loaded font: C:\Users\user\Documents\text_pre_new\fonts\DejaVuSans.ttf
+
+============================================================
+RUNNING 5 TEST CYCLES
+Variations per letter: 4
+Total tests: 5 x 26 x 4 = 520
+Device: GPU: NVIDIA GeForce RTX 4080
+============================================================
+  Cycle 1/5: 78/104 (75.0%) | 256.0 inf/s
+  Cycle 2/5: 78/104 (75.0%) | 302.2 inf/s
+  Cycle 3/5: 78/104 (75.0%) | 302.6 inf/s
+  Cycle 4/5: 78/104 (75.0%) | 304.9 inf/s
+  Cycle 5/5: 78/104 (75.0%) | 299.1 inf/s
+
+============================================================
+TEST RESULTS SUMMARY
+============================================================
+
+Device: GPU: NVIDIA GeForce RTX 4080
+  CUDA: 12.1
+  GPU Memory: 16.0 GB
+
+Overall Accuracy: 75.0%
+Correct: 390 / 520
+
+────────────────────────────────────────
+INFERENCE SPEED
+────────────────────────────────────────
+  Total time:        1.784 s
+  Throughput:        291.4 inferences/sec
+  Avg inference:     0.4491 ms
+  Min inference:     0.2901 ms
+  Max inference:     64.3154 ms
+  Median inference:  0.3113 ms
+  Std deviation:     2.8038 ms
+
+  Slowest letters:
+    Q: 3.5489 ms avg
+    T: 0.3527 ms avg
+    R: 0.3525 ms avg
+    O: 0.3511 ms avg
+    U: 0.3509 ms avg
+
+────────────────────────────────────────
+ACCURACY BREAKDOWN
+────────────────────────────────────────
+
+Perfect Letters (9/26):
+  B F H K N P S T Z
+
+Problem Letters:
+  J: 25% (confused with: Q(5), T(5), W(5))
+  D: 50% (confused with: I(5), W(5))
+  E: 50% (confused with: Q(5), Z(5))
+  G: 50% (confused with: T(5), L(5))
+  I: 50% (confused with: T(5), H(5))
+  R: 50% (confused with: K(5), I(5))
+  X: 50% (confused with: Q(5), O(5))
+  A: 75% (confused with: K(5))
+  C: 75% (confused with: W(5))
+
+============================================================
+
+Results saved to: inference/output/headless_test_20260106_074038.json
+
+(simple) C:\Users\user\Documents\text_pre_new>python alphabet_inference_headless.py
+
+============================================================
+GENREG ALPHABET INFERENCE (HEADLESS)
+============================================================
+
+============================================================
+SELECT ALPHABET GENOME
+============================================================
+
+Available alphabet genomes:
+
+  [1] best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+       Gen ome, 2.8 MB
+
+  [Enter] Use best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+
+Your choice:
+
+============================================================
+SELECT DEVICE
+============================================================
+
+CUDA is available! GPU detected: NVIDIA GeForce RTX 4080
+
+  [1] GPU (CUDA) - Faster inference
+  [2] CPU - Use processor instead
+
+Select device (1/2) [default: 1]: 2
+
+  -> Using CPU
+
+Loading: best_genomes\best_genome_alphabet-raw_gen137000_20260106_122814.pkl
+  Network: 10000 -> 32 -> 26
+  Trust: 18416.30
+
+────────────────────────────────────────
+  RUNNING ON CPU
+  CPU (PyTorch)
+────────────────────────────────────────
+[RENDERER] Loaded font: C:\Users\user\Documents\text_pre_new\fonts\DejaVuSans.ttf
+
+============================================================
+RUNNING 5 TEST CYCLES
+Variations per letter: 4
+Total tests: 5 x 26 x 4 = 520
+Device: CPU (PyTorch)
+============================================================
+  Cycle 1/5: 78/104 (75.0%) | 278.9 inf/s
+  Cycle 2/5: 78/104 (75.0%) | 241.4 inf/s
+  Cycle 3/5: 78/104 (75.0%) | 237.6 inf/s
+  Cycle 4/5: 78/104 (75.0%) | 233.1 inf/s
+  Cycle 5/5: 78/104 (75.0%) | 241.4 inf/s
+
+============================================================
+TEST RESULTS SUMMARY
+============================================================
+
+Device: CPU (PyTorch)
+
+Overall Accuracy: 75.0%
+Correct: 390 / 520
+
+────────────────────────────────────────
+INFERENCE SPEED
+────────────────────────────────────────
+  Total time:        2.120 s
+  Throughput:        245.3 inferences/sec
+  Avg inference:     0.2035 ms
+  Min inference:     0.0951 ms
+  Max inference:     2.7435 ms
+  Median inference:  0.1963 ms
+  Std deviation:     0.1279 ms
+
+  Slowest letters:
+    F: 0.3640 ms avg
+    C: 0.2271 ms avg
+    N: 0.2261 ms avg
+    X: 0.2178 ms avg
+    Q: 0.2155 ms avg
+
+────────────────────────────────────────
+ACCURACY BREAKDOWN
+────────────────────────────────────────
+
+Perfect Letters (9/26):
+  B F H K N P S T Z
+
+Problem Letters:
+  J: 25% (confused with: Q(5), T(5), W(5))        
+  D: 50% (confused with: I(5), W(5))
+  E: 50% (confused with: Q(5), Z(5))
+  G: 50% (confused with: T(5), L(5))
+  I: 50% (confused with: T(5), H(5))
+  R: 50% (confused with: K(5), I(5))
+  U: 50% (confused with: P(5), M(5))
+  X: 50% (confused with: Q(5), O(5))
+  A: 75% (confused with: K(5))
+  C: 75% (confused with: W(5))
+
+============================================================
+
+Results saved to: inference/output/headless_test_20260106_074151.json
