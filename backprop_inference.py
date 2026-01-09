@@ -30,7 +30,7 @@ import torch
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from mlp_model import MLP
+from cnn_model import CNN
 
 # ================================================================
 # CONFIGURATION
@@ -39,7 +39,7 @@ ALPHABET_FIELD_WIDTH = 100
 ALPHABET_FIELD_HEIGHT = 100
 ALPHABET_FONT_SIZE = 64
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
-MLP_MODEL_PATH = "mlp_model.pth" # Default path for the trained MLP model
+MLP_MODEL_PATH = "cnn_model.pth" # Default path for the trained MLP model
 
 
 def download_dejavu_font():
@@ -116,7 +116,7 @@ class MlpInferenceNetwork:
             self.device_type = "cpu"
             self.device_name = "CPU (PyTorch)"
 
-        self.model = MLP(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+        self.model = CNN(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.to(self.device)
         self.model.eval() # Set model to evaluation mode

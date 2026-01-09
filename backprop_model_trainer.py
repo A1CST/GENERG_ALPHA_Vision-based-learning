@@ -10,7 +10,7 @@ import urllib.request
 import time
 
 # Use your existing MLP definition
-from mlp_model import MLP
+from mlp_model import MLP, MLP2, MLP3
 
 # ================================================================
 # CONFIGURATION
@@ -22,11 +22,11 @@ FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 # IMPROVED TRAINING CONFIGURATION
-EPOCHS = 200                     # Increased from 1 to 20
-SAMPLES_PER_LETTER = 3000        # Samples per letter per epoch
-BATCH_SIZE = 32                 # New: Train in batches for stability
-LEARNING_RATE = 3e-3
-MODEL_OUTPUT_PATH = "mlp_model.pth"
+EPOCHS = 12                     # Increased from 1 to 20
+SAMPLES_PER_LETTER = 300        # Samples per letter per epoch
+BATCH_SIZE = 128                 # New: Train in batches for stability
+LEARNING_RATE = 6e-4
+MODEL_OUTPUT_PATH = "cnn_model.pth"
 
 
 def download_dejavu_font():
@@ -148,8 +148,9 @@ def main():
     # Initialize
     renderer = HeadlessLetterRenderer(use_augmentation=True)
     # Ensure MLP is initialized with correct flattened size (100*100 = 10000)
-    model = MLP(input_size=10000, hidden_size=32, output_size=26).to(device)
-    
+    model = MLP3(input_size=10000, hidden_size=410, output_size=26).to(device)
+    NUM_PARAMS = sum([p.numel() for p in model.parameters()])
+    print(f"using {NUM_PARAMS} PARAMS")
     # Use standard PyTorch Optimizer/Loss
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
